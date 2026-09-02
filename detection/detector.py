@@ -38,11 +38,13 @@ class Detector:
             detections: list of dicts (class, confidence, bbox)
             results: raw YOLO results (used for drawing boxes)
         """
-        results = self.model(
+        results = self.model.track(
             frame,
             conf=self.confidence_threshold,
             iou=self.iou_threshold,
             imgsz=self.img_size,
+            persist=True,
+            tracker="bytetrack.yaml",
             verbose=False
         )
 
@@ -58,11 +60,14 @@ class Detector:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 class_name = self.class_names[class_id]
 
-                detections.append({
+                detection = {
                     "class": class_name,
                     "confidence": confidence,
                     "bbox": [x1, y1, x2, y2],
-                })
+                }
+                if box.id is not None:
+                    detection["track_id"] = int(box.id[0])
+                detections.append(detection)
 
         raw_detections = detections
         detections = self._stabilize_vest_detections(raw_detections)
@@ -140,16 +145,21 @@ class Detector:
                     min(width, int(center_x + person_width / 2)),
                     min(height, int(y1 + person_height)),
                 ]
-                worker_seeds.append((detection["confidence"], person_box))
+                worker_seeds.append(
+                    (detection["confidence"], person_box, detection.get("track_id"))
+                )
 
-        return [
-            {
+        inferred_persons = []
+        for confidence, person_box, track_id in worker_seeds:
+            person = {
                 "class": "Person",
                 "confidence": min(0.5, float(confidence)),
                 "bbox": person_box,
             }
-            for confidence, person_box in worker_seeds
-        ]
+            if track_id is not None:
+                person["track_id"] = track_id
+            inferred_persons.append(person)
+        return inferred_persons
 
     def _stabilize_vest_detections(self, detections):
         positive_classes = {"safety_vest"}

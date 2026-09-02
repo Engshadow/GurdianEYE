@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from collections import defaultdict, deque
 from dataclasses import dataclass
 
 
@@ -97,6 +98,7 @@ class MatcherConfig:
     torso_region: tuple = (0.25, 0.9)
     edge_margin_px: int = 5
     stability_frames: int = 5
+    temporal_filter_frames: int = 4
 
 
 # =====================================================================
@@ -108,6 +110,9 @@ class PPEMatcher:
     def __init__(self, config: MatcherConfig | None = None):
         self.cfg = config or MatcherConfig()
         self._history = []
+        self._violation_history = defaultdict(
+            lambda: deque(maxlen=self.cfg.temporal_filter_frames)
+        )
 
     def match(self, detections: list[dict], frame_shape=None) -> list[dict]:
         """Return per-person results in the team-agreed format."""
@@ -143,7 +148,7 @@ class PPEMatcher:
 
             results.append(
                 {
-                    "person_id": i,
+                    "person_id": p.get("track_id", i),
                     "bbox": p["bbox"],
                     "confidence": p["confidence"],
                     "has_helmet": has_helmet,
@@ -155,7 +160,32 @@ class PPEMatcher:
                     "truncated": truncated,
                 }
             )
-        return self._stabilize_results(results)
+        results = self._stabilize_results(results)
+        return self._apply_temporal_filter(results)
+
+    def _apply_temporal_filter(self, results):
+        """Expose a violation only after four consecutive violating frames."""
+        active_ids = set()
+        violation_statuses = {NO_HELMET, NO_VEST, CRITICAL}
+
+        for result in results:
+            person_id = result["person_id"]
+            active_ids.add(person_id)
+            history = self._violation_history[person_id]
+            is_violation = result["status"] in violation_statuses
+            history.append(is_violation)
+
+            if is_violation and (
+                len(history) < self.cfg.temporal_filter_frames
+                or not all(history)
+            ):
+                result["status"] = UNKNOWN
+
+        for person_id in list(self._violation_history):
+            if person_id not in active_ids:
+                del self._violation_history[person_id]
+
+        return results
 
     def _split(self, detections):
         persons, helmets, vests, no_helmets, no_vests = [], [], [], [], []

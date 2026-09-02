@@ -63,7 +63,8 @@ class SafetyMonitor:
 
             if status in (
                 "NO_HELMET",
-                "NO_VEST"
+                "NO_VEST",
+                "CRITICAL_VIOLATION"
             ):
 
                 # Start violation timer

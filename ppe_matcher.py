@@ -448,9 +448,11 @@ class PPEMatcher:
         if person_diagonal == 0:
             person_diagonal = 1
 
+        # If the person is very small, the distance will be relatively large.
+        # This is a way to normalize the distance.
+
         distance_ratio = (
-            distance_between(person_box, ppe_box)
-            / person_diagonal
+            distance_between(person_box, ppe_box)/ person_diagonal
         )
 
         # Reject very bad matches
@@ -464,10 +466,7 @@ class PPEMatcher:
         score = (
             0.7 * contain_score
             +
-            0.3 * max(
-                0,
-                1 - distance_ratio
-            )
+            0.3 * max(0,1 - distance_ratio)
         )
 
         # Add bonus if PPE is in the correct body region
@@ -479,7 +478,7 @@ class PPEMatcher:
 
         return min(score, 1.0)
 
-
+    # Second Trick
     def region_bonus(
         self,
         person_box,
@@ -553,14 +552,14 @@ class PPEMatcher:
         if negative is not None:
             return False, negative
 
-        # Nothing detected → assume missing.
+        # Nothing detected  assume missing.
         return False, None
 
 
     # --------------------------------------------------------
     # STABILITY
     # --------------------------------------------------------
-
+    # FIRST TRICK
     def stabilize(self, results):
 
         for result in results:
@@ -568,7 +567,7 @@ class PPEMatcher:
             previous = self.find_previous(
                 result["bbox"]
             )
-
+            # Third trick: Keep previous PPE for a few frames if it was present before
             if (
                 previous
                 and previous["age"] < self.cfg.stability_frames
@@ -671,10 +670,7 @@ class PPEMatcher:
 
             for item in self.history
 
-            if iou(
-                item["bbox"],
-                bbox
-            ) >= 0.2
+            if iou(item["bbox"],bbox) >= 0.2
         ]
 
         if not matches:
@@ -682,8 +678,7 @@ class PPEMatcher:
 
         return max(
             matches,
-            key=lambda item:
-                iou(item["bbox"], bbox)
+            key=lambda item:iou(item["bbox"], bbox)
         )
 
 

@@ -7,7 +7,7 @@ from detection.detector import Detector
 from ppe_matcher import PPEMatcher, MatcherConfig, summarize
 from safety_monitor import SafetyMonitor
 
-
+# PPE monitoring and violation detection
 # =========================================
 # CONFIG
 # =========================================

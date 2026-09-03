@@ -14,17 +14,17 @@ from safety_monitor import SafetyMonitor
 
 PROJECT_DIR = Path(__file__).resolve().parent
 
-VIDEO_SOURCE = PROJECT_DIR / "videos" / "test3.mp4"
+VIDEO_SOURCE = PROJECT_DIR / "videos" / "test4.mp4"
 MODEL_PATH = PROJECT_DIR / "models" / "best.pt"
 VIOLATIONS_DIR = PROJECT_DIR / "violations"
 
-CONFIDENCE_THRESHOLD = 0.01
+CONFIDENCE_THRESHOLD = 0.2
 IOU_THRESHOLD = 0.3
 YOLO_IMG_SIZE = 1280
 
 DISPLAY_WIDTH = 1900
 
-PLAYBACK_SLOWDOWN = 5.0
+PLAYBACK_SLOWDOWN = 0
 
 WINDOW_NAME = "PPE Detection - Person 2 Pipeline"
 

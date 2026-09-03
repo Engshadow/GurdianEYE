@@ -131,59 +131,7 @@ class SafetyMonitor:
                     None
                 )
 
-            # ====================================================
-            # RESTRICTED ZONE
-            # ====================================================
-
-            if restricted_zone is not None:
-
-                inside_zone = self.is_inside_restricted_zone(
-                    bbox,
-                    restricted_zone
-                )
-
-                if inside_zone:
-
-                    # Alert only once for this person
-                    zone_key = (
-                        person_id,
-                        "RESTRICTED_ZONE"
-                    )
-
-                    if zone_key not in self.alerted_persons:
-
-                        alert = {
-                            "person_id": person_id,
-                            "type": "RESTRICTED_ZONE",
-                            "bbox": bbox,
-                            "timestamp": current_time
-                        }
-
-                        # Alarm
-                        self.trigger_alarm()
-
-                        # Screenshot
-                        if frame is not None:
-
-                            screenshot_path = self.save_screenshot(
-                                frame,
-                                person_id,
-                                "RESTRICTED_ZONE",
-                                bbox
-                            )
-
-                            alert["screenshot"] = screenshot_path
-
-                        # Store alert
-                        alerts.append(alert)
-
-                        self.violation_history.append(
-                            alert
-                        )
-
-                        self.alerted_persons.add(
-                            zone_key
-                        )
+           
 
         # ========================================================
         # REMOVE DISAPPEARED PERSONS
@@ -278,7 +226,7 @@ class SafetyMonitor:
 
     def trigger_alarm(self):
 
-        print("🚨 SAFETY ALARM!")
+        print(" SAFETY ALARM!")
 
         if winsound is not None:
 
@@ -428,7 +376,7 @@ class SafetyMonitor:
         )
 
         print(
-            f"📸 Violating person saved: {path}"
+            f" Violating person saved: {path}"
         )
 
         return path

@@ -131,78 +131,7 @@ class SafetyMonitor:
                     None
                 )
 
-            # ====================================================
-            # RESTRICTED ZONE
-            # ====================================================
 
-            if restricted_zone is not None:
-
-                inside_zone = self.is_inside_restricted_zone(
-                    bbox,
-                    restricted_zone
-                )
-
-                if inside_zone:
-
-                    # Alert only once for this person
-                    zone_key = (
-                        person_id,
-                        "RESTRICTED_ZONE"
-                    )
-
-                    if zone_key not in self.alerted_persons:
-
-                        alert = {
-                            "person_id": person_id,
-                            "type": "RESTRICTED_ZONE",
-                            "bbox": bbox,
-                            "timestamp": current_time
-                        }
-
-                        # Alarm
-                        self.trigger_alarm()
-
-                        # Screenshot
-                        if frame is not None:
-
-                            screenshot_path = self.save_screenshot(
-                                frame,
-                                person_id,
-                                "RESTRICTED_ZONE",
-                                bbox
-                            )
-
-                            alert["screenshot"] = screenshot_path
-
-                        # Store alert
-                        alerts.append(alert)
-
-                        self.violation_history.append(
-                            alert
-                        )
-
-                        self.alerted_persons.add(
-                            zone_key
-                        )
-
-        # ========================================================
-        # REMOVE DISAPPEARED PERSONS
-        # ========================================================
-
-        old_ids = list(
-            self.violation_start.keys()
-        )
-
-        for person_id in old_ids:
-
-            if person_id not in current_person_ids:
-
-                self.violation_start.pop(
-                    person_id,
-                    None
-                )
-
-        return alerts
 
     # ============================================================
     # DRAW SAFETY BOUNDING BOX

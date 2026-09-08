@@ -28,8 +28,6 @@ class Detector:
 
         # All class names, read dynamically — nothing hard-coded
         self.class_names = self.model.names
-        self._recent_vests = []
-        self._recent_persons = []
 
     def detect_frame(self, frame):
         """
@@ -68,13 +66,6 @@ class Detector:
                 if box.id is not None:
                     detection["track_id"] = int(box.id[0])
                 detections.append(detection)
-
-        raw_detections = detections
-        detections = self._stabilize_vest_detections(raw_detections)
-
-        if not any(self._normalise_class_name(d["class"]) in {"person", "person_id"} for d in detections):
-            inferred_persons = self._infer_person_detections(raw_detections, frame.shape)
-            detections.extend(self._stabilize_person_detections(inferred_persons))
 
         return detections, results
 
@@ -120,46 +111,6 @@ class Detector:
 
         return [index for index in range(len(boxes)) if index not in suppressed]
 
-    def _infer_person_detections(self, detections, frame_shape):
-        """Build approximate worker regions from best.pt PPE boxes when needed."""
-        height, width = frame_shape[:2]
-        worker_seeds = []
-        vest_classes = {"vest", "safety_vest", "safety_vest_1"}
-
-        for detection in detections:
-            class_name = self._normalise_class_name(detection["class"])
-            if class_name in vest_classes:
-                x1, y1, x2, y2 = detection["bbox"]
-                box_width = max(1, x2 - x1)
-                box_height = max(1, y2 - y1)
-                person_height = max(box_height * 2.0, height * 0.45)
-                person_width = max(box_width * 1.6, person_height * 0.45)
-                center_x = (x1 + x2) / 2
-                person_box = [
-                    max(0, int(center_x - person_width / 2)),
-                    max(0, int(y1 - box_height * 0.35)),
-                    min(width, int(center_x + person_width / 2)),
-                    min(height, int(y1 + person_height)),
-                ]
-                worker_seeds.append(
-                    (detection["confidence"], person_box, detection.get("track_id"))
-                )
-
-        inferred_persons = []
-        for confidence, person_box, track_id in worker_seeds:
-            person = {
-                "class": "Person",
-                "confidence": min(0.5, float(confidence)),
-                "bbox": person_box,
-            }
-            if track_id is not None:
-                person["track_id"] = track_id
-            inferred_persons.append(person)
-        return inferred_persons
-
-    def _stabilize_vest_detections(self, detections):
-        return detections
-
     @staticmethod
     def _box_iou(first, second):
         intersection = max(0, min(first[2], second[2]) - max(first[0], second[0])) * max(
@@ -170,19 +121,3 @@ class Detector:
         union = first_area + second_area - intersection
         return intersection / union if union else 0
 
-    def _stabilize_person_detections(self, detections):
-        current = [{"bbox": detection["bbox"], "age": 0} for detection in detections]
-        for previous in self._recent_persons:
-            if not any(self._box_iou(previous["bbox"], item["bbox"]) >= 0.2 for item in current):
-                previous["age"] += 1
-                if previous["age"] < 5:
-                    current.append(previous)
-        self._recent_persons = current
-        return [
-            {
-                "class": "Person",
-                "confidence": 0.5,
-                "bbox": item["bbox"],
-            }
-            for item in current
-        ]

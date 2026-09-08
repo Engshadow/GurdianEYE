@@ -12,7 +12,7 @@ class SafetyMonitor:
 
     def __init__(
         self,
-        violation_duration=1.5,
+        violation_duration=.5,
         screenshot_dir="violations",
         alarm_cooldown=3.0
     ):

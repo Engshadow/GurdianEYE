@@ -137,7 +137,7 @@ class MatcherConfig:
 
     # Temporal stability￼
     stability_frames: int = 5
-    temporal_filter_frames: int = 4
+    temporal_filter_frames: int = 5
 
 
 # ============================================================
@@ -393,11 +393,9 @@ class PPEMatcher:
             distance_between(person_box, ppe_box)/ person_diagonal
         )
 
-        # Reject very bad matches
-        if (
-            contain_score < self.cfg.containment_threshold
-            and distance_ratio > self.cfg.max_distance_ratio
-        ):
+        # PPE must be inside the detected person. Distance alone is not
+        # enough because a nearby object can otherwise be assigned to them.
+        if contain_score < self.cfg.containment_threshold:
             return 0
 
         # Main matching score

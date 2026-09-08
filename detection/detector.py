@@ -83,14 +83,14 @@ class Detector:
         return str(class_name).lower().replace("-", "_").replace(" ", "_")
 
     def _filter_conflicting_ppe_boxes(self, boxes):
-        """Keep the stronger prediction when positive and negative PPE boxes overlap."""
+        """Keep the stronger prediction when overlapping PPE boxes conflict."""
         if len(boxes) < 2:
             return list(range(len(boxes)))
 
         names = [self._normalise_class_name(self.class_names[int(box.cls[0])]) for box in boxes]
         ppe_groups = {
-            "helmet": {"hardhat", "no_hardhat", "no_hardhat_v2"},
-            "vest": {"safety_vest", "no_safety_vest", "no_safety_vest_v2"},
+            "helmet": {"helmet", "hardhat", "hard_hat", "hat"},
+            "vest": {"vest", "safety_vest", "safety_vest_1"},
         }
         boxes_xyxy = [box.xyxy[0].tolist() for box in boxes]
         suppressed = set()
@@ -124,11 +124,7 @@ class Detector:
         """Build approximate worker regions from best.pt PPE boxes when needed."""
         height, width = frame_shape[:2]
         worker_seeds = []
-        vest_classes = {
-            "safety_vest",
-            "no_safety_vest",
-            "no_safety_vest_v2",
-        }
+        vest_classes = {"vest", "safety_vest", "safety_vest_1"}
 
         for detection in detections:
             class_name = self._normalise_class_name(detection["class"])
@@ -162,31 +158,7 @@ class Detector:
         return inferred_persons
 
     def _stabilize_vest_detections(self, detections):
-        positive_classes = {"safety_vest"}
-        negative_classes = {"no_safety_vest", "no_safety_vest_v2"}
-        filtered = []
-
-        for detection in detections:
-            class_name = self._normalise_class_name(detection["class"])
-            if class_name in negative_classes and any(
-                self._box_iou(detection["bbox"], previous["bbox"]) >= 0.2
-                for previous in self._recent_vests
-            ):
-                continue
-            filtered.append(detection)
-
-        current_vests = [
-            {"bbox": detection["bbox"], "age": 0}
-            for detection in filtered
-            if self._normalise_class_name(detection["class"]) in positive_classes
-        ]
-        for previous in self._recent_vests:
-            if not any(self._box_iou(previous["bbox"], current["bbox"]) >= 0.2 for current in current_vests):
-                previous["age"] += 1
-                if previous["age"] < 5:
-                    current_vests.append(previous)
-        self._recent_vests = current_vests
-        return filtered
+        return detections
 
     @staticmethod
     def _box_iou(first, second):

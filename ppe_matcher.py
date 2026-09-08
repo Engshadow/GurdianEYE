@@ -109,26 +109,14 @@ class MatcherConfig:
     helmet_classes: tuple = (
         "helmet",
         "hardhat",
-        "hard_hat"
+        "hard_hat",
+        "hat"
     )
 
     vest_classes: tuple = (
         "vest",
         "safety_vest",
         "safety_vest_1"
-    )
-
-    no_helmet_classes: tuple = (
-        "no_helmet",
-        "no_hardhat",
-        "no_hardhat_v2",
-        "head"
-    )
-
-    no_vest_classes: tuple = (
-        "no_vest",
-        "no_safety_vest",
-        "no_safety_vest_v2"
     )
 
     # Confidence thresholds
@@ -147,7 +135,7 @@ class MatcherConfig:
     # Frame edges
     edge_margin_px: int = 5
 
-    # Temporal stability
+    # Temporal stability￼
     stability_frames: int = 5
     temporal_filter_frames: int = 4
 
@@ -178,7 +166,7 @@ class PPEMatcher:
 
     def match(self, detections, frame_shape=None):
 
-        persons, helmets, vests, no_helmets, no_vests = \
+        persons, helmets, vests = \
             self.split_detections(detections)
 
         # Match PPE to persons
@@ -194,18 +182,6 @@ class PPEMatcher:
             "torso"
         )
 
-        no_helmet_matches = self.assign_ppe(
-            persons,
-            no_helmets,
-            "head"
-        )
-
-        no_vest_matches = self.assign_ppe(
-            persons,
-            no_vests,
-            "torso"
-        )
-
         results = []
 
         for person_index, person in enumerate(persons):
@@ -213,17 +189,13 @@ class PPEMatcher:
             has_helmet, helmet_data = self.resolve_ppe(
                 person_index,
                 helmet_matches,
-                helmets,
-                no_helmet_matches,
-                no_helmets
+                helmets
             )
 
             has_vest, vest_data = self.resolve_ppe(
                 person_index,
                 vest_matches,
-                vests,
-                no_vest_matches,
-                no_vests
+                vests
             )
 
             truncated = False
@@ -234,20 +206,10 @@ class PPEMatcher:
                     frame_shape
                 )
 
-            # If the person's head is outside the frame,
-            # we cannot reliably decide about the helmet.
-            head_outside = (
-                truncated
-                and person["bbox"][1] <= self.cfg.edge_margin_px
+            status = classify_status(
+                has_helmet,
+                has_vest
             )
-
-            if head_outside and not has_helmet:
-                status = UNKNOWN
-            else:
-                status = classify_status(
-                    has_helmet,
-                    has_vest
-                )
 
             results.append({
                 "person_id": person.get(
@@ -274,9 +236,6 @@ class PPEMatcher:
                 "truncated": truncated
             })
 
-        # Smooth unstable detections
-        results = self.stabilize(results)
-
         # Require multiple consecutive violation frames
         results = self.apply_temporal_filter(results)
 
@@ -292,9 +251,6 @@ class PPEMatcher:
         persons = []
         helmets = []
         vests = []
-
-        no_helmets = []
-        no_vests = []
 
         for detection in detections:
 
@@ -329,25 +285,7 @@ class PPEMatcher:
             ):
                 vests.append(detection)
 
-            elif (
-                class_name in self.cfg.no_helmet_classes
-                and confidence >= self.cfg.min_ppe_confidence
-            ):
-                no_helmets.append(detection)
-
-            elif (
-                class_name in self.cfg.no_vest_classes
-                and confidence >= self.cfg.min_ppe_confidence
-            ):
-                no_vests.append(detection)
-
-        return (
-            persons,
-            helmets,
-            vests,
-            no_helmets,
-            no_vests
-        )
+        return persons, helmets, vests
 
 
     def normalize_class(self, class_name):
@@ -524,41 +462,18 @@ class PPEMatcher:
         self,
         person_index,
         positive_matches,
-        positive_items,
-        negative_matches,
-        negative_items
+        positive_items
     ):
+        if person_index not in positive_matches:
+            return False, None
 
-        positive = None
-        negative = None
-
-        if person_index in positive_matches:
-
-            ppe_index = positive_matches[person_index]
-
-            positive = positive_items[ppe_index]
-
-        if person_index in negative_matches:
-
-            ppe_index = negative_matches[person_index]
-
-            negative = negative_items[ppe_index]
-
-        # If positive PPE exists, consider PPE present.
-        if positive is not None:
-            return True, positive
-
-        # Negative detection means PPE is missing.
-        if negative is not None:
-            return False, negative
-
-        # Nothing detected  assume missing.
-        return False, None
+        ppe_index = positive_matches[person_index]
+        return True, positive_items[ppe_index]
 
 
     # --------------------------------------------------------
     # STABILITY
-    # --------------------------------------------------------
+    # --------------------------------------------------------  
     # FIRST TRICK
     def stabilize(self, results):
 

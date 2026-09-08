@@ -11,9 +11,14 @@ class Detector:
     def __init__(
         self,
         model_path="models/best.pt",
-        confidence_threshold=0.5,
+        confidence_threshold=0.25,
         iou_threshold=0.5,
         img_size=940,
+        use_tta=False,
+        target_classes=None,
+        box_smoothing=0.6,
+        conf_smoothing=0.5,
+        max_track_age=30,
     ):
         self.model = YOLO(model_path)
         self.confidence_threshold = confidence_threshold
@@ -25,9 +30,26 @@ class Detector:
         # Inference resolution — lower = faster, but can miss small
         # objects (e.g. a small hardhat far from the camera).
         self.img_size = img_size
+        self.use_tta = use_tta
+        self.box_smoothing = box_smoothing
+        self.conf_smoothing = conf_smoothing
+        self.max_track_age = max_track_age
+        self.box_ema = {}
+        self.conf_ema = {}
+        self.track_last_seen = {}
+        self.frame_count = 0
 
         # All class names, read dynamically — nothing hard-coded
         self.class_names = self.model.names
+        if target_classes is None:
+            self.class_filter = None
+        else:
+            wanted = {self._normalise_class_name(name) for name in target_classes}
+            self.class_filter = [
+                class_id
+                for class_id, name in self.class_names.items()
+                if self._normalise_class_name(name) in wanted
+            ]
 
     def detect_frame(self, frame):
         """
@@ -36,17 +58,24 @@ class Detector:
             detections: list of dicts (class, confidence, bbox)
             results: raw YOLO results (used for drawing boxes)
         """
-        results = self.model.track(
-            frame,
-            conf=self.confidence_threshold,
-            iou=self.iou_threshold,
-            imgsz=self.img_size,
-            persist=True,
-            tracker="bytetrack.yaml",
-            verbose=False
-        )
+        kwargs = {
+            "conf": self.confidence_threshold,
+            "iou": self.iou_threshold,
+            "imgsz": self.img_size,
+            "persist": True,
+            "tracker": "bytetrack.yaml",
+            "verbose": False,
+        }
+        if self.use_tta:
+            kwargs["augment"] = True
+        if self.class_filter:
+            kwargs["classes"] = self.class_filter
+
+        results = self.model.track(frame, **kwargs)
 
         detections = []
+        current_ids = set()
+        self.frame_count += 1
 
         for result in results:
             keep_indices = self._filter_conflicting_ppe_boxes(result.boxes)
@@ -64,10 +93,45 @@ class Detector:
                     "bbox": [x1, y1, x2, y2],
                 }
                 if box.id is not None:
-                    detection["track_id"] = int(box.id[0])
+                    track_id = int(box.id[0])
+                    detection["track_id"] = track_id
+                    current_ids.add(track_id)
+                    self.track_last_seen[track_id] = self.frame_count
+                    detection["bbox"] = self._smooth(
+                        self.box_ema,
+                        track_id,
+                        detection["bbox"],
+                        self.box_smoothing,
+                    )
+                    detection["confidence"] = self._smooth(
+                        self.conf_ema,
+                        track_id,
+                        confidence,
+                        self.conf_smoothing,
+                    )
                 detections.append(detection)
 
+        self._prune_tracks(current_ids)
         return detections, results
+
+    @staticmethod
+    def _smooth(store, track_id, value, alpha):
+        if track_id in store:
+            old = store[track_id]
+            if isinstance(value, list):
+                value = [previous * (1 - alpha) + current * alpha
+                         for previous, current in zip(old, value)]
+            else:
+                value = old * (1 - alpha) + value * alpha
+        store[track_id] = value
+        return value
+
+    def _prune_tracks(self, current_ids):
+        for track_id in list(self.track_last_seen):
+            if self.frame_count - self.track_last_seen[track_id] > self.max_track_age:
+                self.track_last_seen.pop(track_id, None)
+                self.box_ema.pop(track_id, None)
+                self.conf_ema.pop(track_id, None)
 
     @staticmethod
     def _normalise_class_name(class_name):

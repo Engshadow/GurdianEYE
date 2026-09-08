@@ -4,6 +4,12 @@ import math
 from collections import defaultdict, deque
 from dataclasses import dataclass
 
+try:
+    from scipy.optimize import linear_sum_assignment
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
+
 
 # ============================================================
 # CONSTANTS
@@ -120,16 +126,16 @@ class MatcherConfig:
     )
 
     # Confidence thresholds
-    min_person_confidence: float = 0.4
-    min_ppe_confidence: float = 0.4
+    min_person_confidence: float = 0.45
+    min_ppe_confidence: float = 0.30
 
     # Matching thresholds
-    containment_threshold: float = 0.5
+    containment_threshold: float = 0.35
     max_distance_ratio: float = 0.8
     min_match_score: float = 0.35
 
     # Person regions
-    head_region_ratio: float = 0.5
+    head_region_ratio: float = 0.30
     torso_region: tuple = (0.25, 0.9)
 
     # Frame edges
@@ -138,6 +144,8 @@ class MatcherConfig:
     # Temporal stability￼
     stability_frames: int = 5
     temporal_filter_frames: int = 5
+    max_filter_dropouts: int = 1
+    iou_id_threshold: float = 0.30
 
 
 # ============================================================
@@ -159,6 +167,8 @@ class PPEMatcher:
                 maxlen=self.cfg.temporal_filter_frames
             )
         )
+        self._pseudo_counter = 0
+        self._last_untracked = []
 
     # --------------------------------------------------------
     # MAIN FUNCTION
@@ -168,6 +178,8 @@ class PPEMatcher:
 
         persons, helmets, vests = \
             self.split_detections(detections)
+
+        self._assign_stable_ids(persons)
 
         # Match PPE to persons
         helmet_matches = self.assign_ppe(
@@ -212,10 +224,8 @@ class PPEMatcher:
             )
 
             results.append({
-                "person_id": person.get(
-                    "track_id",
-                    person_index
-                ),
+                "person_id": person["uid"],
+                "track_id": person.get("track_id"),
 
                 "bbox": person["bbox"],
                 "confidence": person["confidence"],
@@ -236,10 +246,41 @@ class PPEMatcher:
                 "truncated": truncated
             })
 
-        # Require multiple consecutive violation frames
+        results = self.stabilize(results)
         results = self.apply_temporal_filter(results)
 
         return results
+
+    def _assign_stable_ids(self, persons):
+        used = set()
+        next_untracked = []
+
+        for person in persons:
+            track_id = person.get("track_id")
+            if track_id is not None:
+                person["uid"] = track_id
+                used.add(track_id)
+                continue
+
+            best_id = None
+            best_overlap = self.cfg.iou_id_threshold
+            for pseudo_id, previous_box in self._last_untracked:
+                if pseudo_id in used:
+                    continue
+                overlap = iou(previous_box, person["bbox"])
+                if overlap > best_overlap:
+                    best_id = pseudo_id
+                    best_overlap = overlap
+
+            if best_id is None:
+                self._pseudo_counter += 1
+                best_id = f"u{self._pseudo_counter}"
+
+            person["uid"] = best_id
+            used.add(best_id)
+            next_untracked.append((best_id, person["bbox"]))
+
+        self._last_untracked = next_untracked
 
 
     # --------------------------------------------------------
@@ -304,54 +345,38 @@ class PPEMatcher:
     # --------------------------------------------------------
 
     def assign_ppe(self, persons, ppe_items, region):
+        if not persons or not ppe_items:
+            return {}
 
-        candidates = []
+        scores = [
+            [self.calculate_score(person["bbox"], ppe["bbox"], region)
+             for ppe in ppe_items]
+            for person in persons
+        ]
 
-        # Calculate match score for every
-        # person-PPE combination
-        for person_index, person in enumerate(persons):
+        if HAS_SCIPY:
+            rows, columns = linear_sum_assignment(
+                [[-score for score in row] for row in scores]
+            )
+            return {
+                row: column
+                for row, column in zip(rows, columns)
+                if scores[row][column] >= self.cfg.min_match_score
+            }
 
-            for ppe_index, ppe in enumerate(ppe_items):
-
-                score = self.calculate_score(
-                    person["bbox"],
-                    ppe["bbox"],
-                    region
-                )
-
-                if score >= self.cfg.min_match_score:
-
-                    candidates.append(
-                        (
-                            score,
-                            person_index,
-                            ppe_index
-                        )
-                    )
-
-        # Best matches first
-        candidates.sort(
-            key=lambda item: item[0],
-            reverse=True
+        candidates = sorted(
+            ((scores[person][ppe], person, ppe)
+             for person in range(len(persons))
+             for ppe in range(len(ppe_items))),
+            reverse=True,
         )
-
         matches = {}
-
         used_ppe = set()
-
-        for score, person_index, ppe_index in candidates:
-
-            # Each person gets only one PPE
-            if person_index in matches:
+        for score, person, ppe in candidates:
+            if score < self.cfg.min_match_score or person in matches or ppe in used_ppe:
                 continue
-
-            # Each PPE belongs to only one person
-            if ppe_index in used_ppe:
-                continue
-
-            matches[person_index] = ppe_index
-            used_ppe.add(ppe_index)
-
+            matches[person] = ppe
+            used_ppe.add(ppe)
         return matches
 
 
@@ -375,7 +400,14 @@ class PPEMatcher:
             person_box
         )
 
-        # Normalize distance using person size
+        ppe_center = get_center(ppe_box)
+        center_inside = (
+            person_box[0] <= ppe_center[0] <= person_box[2]
+            and person_box[1] <= ppe_center[1] <= person_box[3]
+        )
+        if contain_score < self.cfg.containment_threshold and not center_inside:
+            return 0
+
         px1, py1, px2, py2 = person_box
 
         person_diagonal = math.hypot(
@@ -393,17 +425,7 @@ class PPEMatcher:
             distance_between(person_box, ppe_box)/ person_diagonal
         )
 
-        # PPE must be inside the detected person. Distance alone is not
-        # enough because a nearby object can otherwise be assigned to them.
-        if contain_score < self.cfg.containment_threshold:
-            return 0
-
-        # Main matching score
-        score = (
-            0.7 * contain_score
-            +
-            0.3 * max(0,1 - distance_ratio)
-        )
+        score = 0.65 * contain_score + 0.35 * max(0.0, 1.0 - distance_ratio)
 
         # Add bonus if PPE is in the correct body region
         score += self.region_bonus(
@@ -411,8 +433,20 @@ class PPEMatcher:
             ppe_box,
             region
         )
+        score += self.scale_prior(person_box, ppe_box, region)
 
         return min(score, 1.0)
+
+    def scale_prior(self, person_box, ppe_box, region):
+        person_width = max(1, person_box[2] - person_box[0])
+        ppe_width = max(1, ppe_box[2] - ppe_box[0])
+        ratio = ppe_width / person_width
+        lower, upper = (0.10, 0.60) if region == "head" else (0.30, 0.95)
+        if lower <= ratio <= upper:
+            return 0.10
+        if ratio < lower:
+            return -0.10 * min(1.0, (lower - ratio) / lower)
+        return -0.10 * min(1.0, (ratio - upper) / upper)
 
     # Second Trick
     def region_bonus(
@@ -421,24 +455,17 @@ class PPEMatcher:
         ppe_box,
         region
     ):
-
         _, person_top, _, person_bottom = person_box
         _, ppe_y = get_center(ppe_box)
-
-        person_height = max(
-            1,
-            person_bottom - person_top
-        )
-
-        relative_y = (
-            ppe_y - person_top
-        ) / person_height
+        person_height = max(1, person_bottom - person_top)
+        relative_y = (ppe_y - person_top) / person_height
 
         # Helmet should be near the head
         if region == "head":
-
+            if relative_y <= 0.15:
+                return 0.15
             if relative_y <= self.cfg.head_region_ratio:
-                return 0.10
+                return 0.08
 
         # Vest should be around the torso
         elif region == "torso":
@@ -464,7 +491,6 @@ class PPEMatcher:
     ):
         if person_index not in positive_matches:
             return False, None
-
         ppe_index = positive_matches[person_index]
         return True, positive_items[ppe_index]
 
@@ -477,9 +503,7 @@ class PPEMatcher:
 
         for result in results:
 
-            previous = self.find_previous(
-                result["bbox"]
-            )
+            previous = self.find_previous(result)
             # Third trick: Keep previous PPE for a few frames if it was present before
             if (
                 previous
@@ -526,11 +550,11 @@ class PPEMatcher:
 
         for result in results:
 
-            previous = self.find_previous(
-                result["bbox"]
-            )
+            previous = self.find_previous(result)
 
             new_history.append({
+
+                "track_id": result.get("track_id"),
 
                 "bbox": result["bbox"],
 
@@ -548,7 +572,7 @@ class PPEMatcher:
 
                 "age":
                     0 if previous is None
-                    else previous["age"]
+                    else 0
             })
 
         # Keep old detections for a few frames
@@ -575,7 +599,15 @@ class PPEMatcher:
         self.history = new_history
 
 
-    def find_previous(self, bbox):
+    def find_previous(self, result):
+
+        track_id = result.get("track_id")
+        if track_id is not None:
+            for item in self.history:
+                if item.get("track_id") == track_id:
+                    return item
+
+        bbox = result["bbox"]
 
         matches = [
 
@@ -615,9 +647,11 @@ class PPEMatcher:
 
             active_ids.add(person_id)
 
-            history = self.violation_history[
-                person_id
-            ]
+            history = self.violation_history[person_id]
+
+            if result["status"] == SAFE:
+                history.clear()
+                continue
 
             is_violation = (
                 result["status"]
@@ -634,7 +668,10 @@ class PPEMatcher:
                     >= self.cfg.temporal_filter_frames
                 )
 
-                continuous_violation = all(history)
+                continuous_violation = (
+                    sum(history)
+                    >= len(history) - self.cfg.max_filter_dropouts
+                )
 
                 if (
                     not enough_frames

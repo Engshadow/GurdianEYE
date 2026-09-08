@@ -2,6 +2,13 @@ import os
 import time
 import cv2
 
+
+VIOLATION_STATES = (
+    "NO_HELMET",
+    "NO_VEST",
+    "CRITICAL_VIOLATION",
+)
+
 try:
     import winsound
 except ImportError:
@@ -14,11 +21,15 @@ class SafetyMonitor:
         self,
         violation_duration=.5,
         screenshot_dir="violations",
-        alarm_cooldown=3.0
+        alarm_cooldown=3.0,
+        playback_slowdown=1.0,
+        rearm_seconds=2.0,
     ):
         self.violation_duration = violation_duration
         self.screenshot_dir = screenshot_dir
         self.alarm_cooldown = alarm_cooldown
+        self.playback_slowdown = max(0.01, playback_slowdown)
+        self.rearm_seconds = rearm_seconds
 
         # Create screenshot folder
         os.makedirs(
@@ -28,7 +39,8 @@ class SafetyMonitor:
 
         # Track violations
         self.violation_start = {}
-        self.last_alert_time = {}
+        self.last_alarm_time = float("-inf")
+        self.safe_since = {}
         self.violation_history = []
 
         # Store persons who already received an alert
@@ -42,9 +54,14 @@ class SafetyMonitor:
         self,
         safety_results,
         frame=None,
-        restricted_zone=None
+        restricted_zone=None,
+        video_time=None,
     ):
-        current_time = time.time()
+        current_time = (
+            video_time
+            if video_time is not None
+            else time.time() / self.playback_slowdown
+        )
         alerts = []
 
         current_person_ids = set()
@@ -61,11 +78,8 @@ class SafetyMonitor:
             # SAFETY VIOLATION
             # ====================================================
 
-            if status in (
-                "NO_HELMET",
-                "NO_VEST",
-                "CRITICAL_VIOLATION"
-            ):
+            if status in VIOLATION_STATES:
+                self.safe_since.pop(person_id, None)
 
                 # Start violation timer
                 if person_id not in self.violation_start:
@@ -79,7 +93,6 @@ class SafetyMonitor:
                 # Wait until violation lasts 1.5 seconds
                 if duration >= self.violation_duration:
 
-                    # Alert only ONCE per person
                     if person_id not in self.alerted_persons:
 
                         alert = {
@@ -94,7 +107,9 @@ class SafetyMonitor:
                         # ALARM
                         # ====================================================
 
-                        self.trigger_alarm()
+                        if current_time - self.last_alarm_time >= self.alarm_cooldown:
+                            self.trigger_alarm()
+                            self.last_alarm_time = current_time
 
                         # ====================================================
                         # SCREENSHOT
@@ -130,6 +145,11 @@ class SafetyMonitor:
                     person_id,
                     None
                 )
+                if person_id in self.alerted_persons:
+                    safe_since = self.safe_since.setdefault(person_id, current_time)
+                    if current_time - safe_since >= self.rearm_seconds:
+                        self.alerted_persons.discard(person_id)
+                        self.safe_since.pop(person_id, None)
 
            
 
@@ -149,6 +169,10 @@ class SafetyMonitor:
                     person_id,
                     None
                 )
+
+        for person_id in list(self.safe_since):
+            if person_id not in current_person_ids:
+                self.safe_since.pop(person_id, None)
 
         return alerts
 
@@ -181,6 +205,7 @@ class SafetyMonitor:
             if status in (
                 "NO_HELMET",
                 "NO_VEST",
+                "CRITICAL_VIOLATION",
                 "RESTRICTED_ZONE"
             ):
 
@@ -459,6 +484,7 @@ class SafetyMonitor:
 
         self.violation_start.clear()
 
-        self.last_alert_time.clear()
+        self.last_alarm_time = float("-inf")
+        self.safe_since.clear()
 
         self.alerted_persons.clear()

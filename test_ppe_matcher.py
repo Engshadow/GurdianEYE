@@ -21,6 +21,34 @@ def test_matcher_classifies_worker_statuses():
     assert results[1]["missing_ppe"] == ["helmet"]
 
 
+def test_missing_positive_detections_mean_missing_ppe():
+    matcher = PPEMatcher(MatcherConfig(temporal_filter_frames=1))
+    detections = [
+        {"class": "Person", "confidence": 0.95, "bbox": [50, 80, 190, 430]},
+    ]
+
+    result = matcher.match(detections)[0]
+
+    assert result["has_helmet"] is False
+    assert result["has_vest"] is False
+    assert result["missing_ppe"] == ["helmet", "vest"]
+    assert result["status"] == "CRITICAL_VIOLATION"
+
+
+def test_old_negative_class_names_are_not_positive_ppe():
+    matcher = PPEMatcher(MatcherConfig(temporal_filter_frames=1))
+    detections = [
+        {"class": "person", "confidence": 0.95, "bbox": [50, 80, 190, 430]},
+        {"class": "no_helmet", "confidence": 0.95, "bbox": [90, 90, 150, 150]},
+        {"class": "no_vest", "confidence": 0.95, "bbox": [75, 180, 170, 300]},
+    ]
+
+    result = matcher.match(detections)[0]
+
+    assert result["has_helmet"] is False
+    assert result["has_vest"] is False
+
+
 def test_matcher_requires_four_consecutive_violation_frames():
     matcher = PPEMatcher()
     detections = [

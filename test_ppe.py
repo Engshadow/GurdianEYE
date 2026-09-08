@@ -1,3 +1,10 @@
+import pytest
+
+pytest.skip(
+    "manual video test; run directly instead of collecting with pytest",
+    allow_module_level=True,
+)
+
 import cv2
 from ultralytics import YOLO
 

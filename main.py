@@ -14,7 +14,7 @@ from safety_monitor import SafetyMonitor
 
 PROJECT_DIR = Path(__file__).resolve().parent
 
-VIDEO_SOURCE = PROJECT_DIR / "videos" / "test4.mp4"
+VIDEO_SOURCE = PROJECT_DIR / "videos" / "test3.mp4"
 MODEL_PATH = PROJECT_DIR / "models" / "best.pt"
 VIOLATIONS_DIR = PROJECT_DIR / "violations"
 
@@ -24,7 +24,7 @@ YOLO_IMG_SIZE = 1280
 
 DISPLAY_WIDTH = 1900
 
-PLAYBACK_SLOWDOWN = 0
+PLAYBACK_SLOWDOWN = 5.0
 
 WINDOW_NAME = "PPE Detection - Person 2 Pipeline"
 
@@ -46,8 +46,9 @@ detector = Detector(
 # =========================================
 
 matcher_config = MatcherConfig(
-    min_person_confidence=0.01,
-    min_ppe_confidence=0.4,
+    min_person_confidence=0.5,
+    min_ppe_confidence=0.5,
+    temporal_filter_frames=5,
 )
 
 matcher = PPEMatcher(matcher_config)
@@ -58,7 +59,7 @@ matcher = PPEMatcher(matcher_config)
 # =========================================
 
 monitor = SafetyMonitor(
-    violation_duration=1.5,
+    violation_duration=1.0,
     screenshot_dir=str(VIOLATIONS_DIR),
     alarm_cooldown=3.0
 )

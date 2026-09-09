@@ -1,114 +1,57 @@
 # GurdianEYE
 
+## PPE Detection and Smart Safety Monitoring System
 
-PPE Detection & Smart Safety Monitoring System
-Project Overview
+GurdianEYE is an artificial intelligence workplace safety system that uses YOLO and computer vision to detect workers and their personal protective equipment.
 
-PPE Detection & Smart Safety Monitoring System is an AI-powered workplace safety monitoring system that uses YOLO and Computer Vision to detect workers and their Personal Protective Equipment (PPE), determine each worker's safety status, and automatically generate alerts and visual evidence for safety violations.
+The system identifies helmets and safety vests, matches PPE to individual workers, classifies safety status, triggers alerts, and saves evidence of confirmed violations.
 
-The system is designed to help improve workplace safety by automatically monitoring PPE compliance and reducing the need for continuous manual inspection.
+## Project Title
 
-Main Objective
+GurdianEYE: AI-Based PPE Detection and Safety Monitoring System
 
-The main objective of this project is to develop a real-time safety monitoring system that can detect workers, identify their PPE, determine safety violations, and provide immediate alerts with visual evidence.
+## Goal
 
-The system follows the process:
+To automatically detect workers and verify helmet and safety-vest compliance in order to identify workplace safety violations quickly.
 
-Detect
-   ↓
-Match
-   ↓
-Classify
-   ↓
-Alert
-   ↓
-Record
-System Architecture
-                    Camera / Video
-                          |
-                       OpenCV
-                          |
-                      YOLO Model
-                          |
-             +------------+------------+
-             |            |            |
-          Person       Helmet         Vest
-             |            |            |
-             +------------+------------+
-                          |
-                    PPE Matching
-                          |
-                  Safety Classification
-                          |
-             +------------+------------+
-             |                         |
-           SAFE                   VIOLATION
-                                       |
-                         +-------------+-------------+
-                         |             |             |
-                       Alarm      Screenshot        Log
-                         |             |             |
-                         +-------------+-------------+
-                                       |
-                              Desktop Application
-Key Features
-AI-Based PPE Detection
+## Role
 
-The system uses a YOLO-based object detection model to detect workers and PPE equipment.
+Developer responsible for YOLO model integration, computer-vision processing, PPE matching, safety-status classification, temporal filtering, alarm handling, and violation evidence capture.
 
-Depending on the trained dataset, the supported classes may include:
+## Method
 
-Person
-Helmet
-Vest
-No Helmet
-No Vest
-Person-PPE Matching
+The system processes video or camera input using OpenCV. A YOLO model detects people, helmets, and safety vests.
 
-The system determines which helmet and vest belong to each detected worker using bounding-box relationships and spatial information.
+The PPE matcher assigns detected equipment to each worker using bounding-box containment, object position, confidence thresholds, body-region analysis, temporal stability, and worker tracking.
 
-Example:
+Each worker is classified as one of the following:
 
-Person #1
-   |
-   +-- Helmet
-   |
-   +-- Vest
+- SAFE
+- NO_HELMET
+- NO_VEST
+- CRITICAL_VIOLATION
+- UNKNOWN
 
-Status: SAFE
-Safety Violation Detection
+A violation must remain present for a configured duration before the system triggers an alarm and saves a screenshot.
 
-The system can detect different types of safety violations, including:
+## Result
 
-NO HELMET
-NO VEST
-NO HELMET + NO VEST
-RESTRICTED ZONE VIOLATION
-Violation Persistence
+The system provides real-time annotated video, worker-level PPE status, detection summaries, safety alarms, and saved screenshots of confirmed violations.
 
-To reduce false alarms, the system does not necessarily trigger an alarm when a violation appears in only one frame.
+Temporal filtering helps reduce false alerts caused by unstable detections in individual video frames.
 
-The violation can be required to remain present for a specific period before an alert is generated.
+The system can identify workers who are fully compliant, missing a helmet, missing a safety vest, or missing both.
 
-Violation Detected
-        |
-        v
-Persists for Required Duration?
-        |
-       YES
-        |
-        v
-      ALERT
-Violation Evidence
+## Source Label
 
-When a confirmed violation occurs, the system captures a screenshot of the violation and stores it for later review.
+Training / Practice
 
-Example:
+The detector is trained with PPE images and tested using a practice video or camera stream. The system is a prototype and should be validated with site-specific data before being used in a real workplace.
 
-violations/
-    violation_001.jpg
-    violation_002.jpg
-    violation_003.jpg
-Safety Alarm
+## Evidence Attached
 
-The system can trigger an audio alarm when a confirmed safety violation is detected.
+An annotated screenshot showing a detected worker, the worker's bounding box, PPE status, detected helmet or safety vest, and saved violation evidence from the `violations/` folder.
+
+## Caption
+
+Figure 1. GurdianEYE detects a worker and evaluates helmet and safety-vest compliance. The displayed status identifies whether the worker is safe or missing required PPE, while confirmed violations are saved as visual evidence.

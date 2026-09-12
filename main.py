@@ -15,7 +15,7 @@ from timing import TimingConfig
 
 PROJECT_DIR = Path(__file__).resolve().parent
 
-VIDEO_SOURCE = PROJECT_DIR / "videos" / "test.mp4"
+VIDEO_SOURCE = PROJECT_DIR / "videos" / "test3.mp4"
 MODEL_PATH = PROJECT_DIR / "models" / "best.pt"
 VIOLATIONS_DIR = PROJECT_DIR / "violations"
 
@@ -25,7 +25,7 @@ YOLO_IMG_SIZE = 1280
 
 DISPLAY_WIDTH = 1900
 
-PLAYBACK_SLOWDOWN = 5.0
+PLAYBACK_SLOWDOWN = 2.0
 
 WINDOW_NAME = "PPE Detection - Person 2 Pipeline"
 
@@ -39,7 +39,7 @@ detector = Detector(
     confidence_threshold=0.25,
     iou_threshold=IOU_THRESHOLD,
     img_size=YOLO_IMG_SIZE,
-    use_tta=False,
+    use_tta=True,
     target_classes=(
         "person", "helmet", "hardhat", "hard_hat", "hat",
         "vest", "safety_vest", "safety_vest_1",
@@ -82,7 +82,7 @@ timing = TimingConfig(
 )
 
 matcher = PPEMatcher(MatcherConfig(
-    min_person_confidence=0.45,
+    min_person_confidence=0.30,
     min_ppe_confidence=0.30,
     temporal_filter_frames=timing.temporal_filter_frames,
     stability_frames=timing.stability_frames,
@@ -366,7 +366,7 @@ while True:
         for alert in alerts:
 
             print(
-                f"🚨 ALERT: Person "
+                f" ALERT: Person "
                 f"{alert['person_id']} "
                 f"- {alert['type']}"
             )

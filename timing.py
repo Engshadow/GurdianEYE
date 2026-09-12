@@ -3,7 +3,6 @@ from dataclasses import dataclass
 
 @dataclass
 class TimingConfig:
-    """Temporal settings expressed in video (scene) seconds."""
 
     violation_seconds: float = 1.0
     filter_seconds: float = 0.5

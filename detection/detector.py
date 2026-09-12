@@ -2,11 +2,7 @@ from ultralytics import YOLO
 
 
 class Detector:
-    """
-    Person 2 responsibility: pure detection.
-    Loads the YOLO model and runs inference on frames.
-    Returns detections in the standard team-agreed format.
-    """
+
 
     def __init__(
         self,

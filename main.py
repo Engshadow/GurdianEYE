@@ -2,6 +2,7 @@ import time
 from pathlib import Path
 
 import cv2
+from sympy import false
 
 from detection.detector import Detector
 from ppe_matcher import PPEMatcher, MatcherConfig, summarize
@@ -21,13 +22,13 @@ VIOLATIONS_DIR = PROJECT_DIR / "violations"
 
 CONFIDENCE_THRESHOLD = 0.2
 IOU_THRESHOLD = 0.3
-YOLO_IMG_SIZE = 1280
+YOLO_IMG_SIZE = 640
 
 DISPLAY_WIDTH = 1900
 
 PLAYBACK_SLOWDOWN = 2.0
 
-WINDOW_NAME = "PPE Detection - Person 2 Pipeline"
+WINDOW_NAME = "PPE Detection "
 
 
 # =========================================
@@ -39,7 +40,7 @@ detector = Detector(
     confidence_threshold=0.25,
     iou_threshold=IOU_THRESHOLD,
     img_size=YOLO_IMG_SIZE,
-    use_tta=True,
+    use_tta=False,
     target_classes=(
         "person", "helmet", "hardhat", "hard_hat", "hat",
         "vest", "safety_vest", "safety_vest_1",

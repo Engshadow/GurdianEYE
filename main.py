@@ -75,9 +75,9 @@ if not source_fps or source_fps <= 0:
 
 
 timing = TimingConfig(
-    violation_seconds=0.5,   # tuned: redundant with filter; 0.5 cuts latency
-    filter_seconds=0.5,      # tuned: flicker knee (TUNING_REPORT.md)
-    stability_seconds=0.4,   # tuned: short so PPE removal isn't masked
+    violation_seconds=0.5,  
+    filter_seconds=0.5,     
+    stability_seconds=0.4,  
     source_fps=source_fps,
     playback_slowdown=PLAYBACK_SLOWDOWN,
 )

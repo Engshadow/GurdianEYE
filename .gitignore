@@ -1,3 +1,8 @@
 __pycache__/
 videos/
-
+violations/
+tuning/cache/
+tuning/results/_monitor_tmp/
+tuning/labeling/crops/
+tuning/
+TUNING_REPORT.md

@@ -2,10 +2,12 @@ import time
 from pathlib import Path
 
 import cv2
+from sympy import false
 
 from detection.detector import Detector
 from ppe_matcher import PPEMatcher, MatcherConfig, summarize
 from safety_monitor import SafetyMonitor
+from timing import TimingConfig
 
 # PPE monitoring and violation detection
 # =========================================
@@ -14,19 +16,19 @@ from safety_monitor import SafetyMonitor
 
 PROJECT_DIR = Path(__file__).resolve().parent
 
-VIDEO_SOURCE = PROJECT_DIR / "videos" / "test3.mp4"
+VIDEO_SOURCE = PROJECT_DIR / "videos" / "test5.mp4"
 MODEL_PATH = PROJECT_DIR / "models" / "best.pt"
 VIOLATIONS_DIR = PROJECT_DIR / "violations"
 
 CONFIDENCE_THRESHOLD = 0.2
 IOU_THRESHOLD = 0.3
-YOLO_IMG_SIZE = 1280
+YOLO_IMG_SIZE = 640
 
 DISPLAY_WIDTH = 1900
 
-PLAYBACK_SLOWDOWN = 5.0
+PLAYBACK_SLOWDOWN = 2.0
 
-WINDOW_NAME = "PPE Detection - Person 2 Pipeline"
+WINDOW_NAME = "PPE Detection "
 
 
 # =========================================
@@ -35,9 +37,14 @@ WINDOW_NAME = "PPE Detection - Person 2 Pipeline"
 
 detector = Detector(
     model_path=str(MODEL_PATH),
-    confidence_threshold=CONFIDENCE_THRESHOLD,
+    confidence_threshold=0.25,
     iou_threshold=IOU_THRESHOLD,
     img_size=YOLO_IMG_SIZE,
+    use_tta=False,
+    target_classes=(
+        "person", "helmet", "hardhat", "hard_hat", "hat",
+        "vest", "safety_vest", "safety_vest_1",
+    ),
 )
 
 
@@ -45,28 +52,8 @@ detector = Detector(
 # 2. Create PPE Matcher
 # =========================================
 
-matcher_config = MatcherConfig(
-    min_person_confidence=0.5,
-    min_ppe_confidence=0.5,
-    temporal_filter_frames=5,
-)
-
-matcher = PPEMatcher(matcher_config)
-
-
 # =========================================
-# 3. Create Safety Monitor
-# =========================================
-
-monitor = SafetyMonitor(
-    violation_duration=1.0,
-    screenshot_dir=str(VIOLATIONS_DIR),
-    alarm_cooldown=3.0
-)
-
-
-# =========================================
-# 4. Camera / Video
+# 3. Camera / Video
 # =========================================
 
 cap = cv2.VideoCapture(VIDEO_SOURCE)
@@ -85,6 +72,30 @@ source_fps = cap.get(cv2.CAP_PROP_FPS)
 if not source_fps or source_fps <= 0:
 
     source_fps = 30
+
+
+timing = TimingConfig(
+    violation_seconds=0.5,   # tuned: redundant with filter; 0.5 cuts latency
+    filter_seconds=0.5,      # tuned: flicker knee (TUNING_REPORT.md)
+    stability_seconds=0.4,   # tuned: short so PPE removal isn't masked
+    source_fps=source_fps,
+    playback_slowdown=PLAYBACK_SLOWDOWN,
+)
+
+matcher = PPEMatcher(MatcherConfig(
+    min_person_confidence=0.45,
+    min_ppe_confidence=0.30,
+    temporal_filter_frames=timing.temporal_filter_frames,
+    stability_frames=timing.stability_frames,
+))
+
+monitor = SafetyMonitor(
+    violation_duration=timing.violation_seconds,
+    screenshot_dir=str(VIOLATIONS_DIR),
+    alarm_cooldown=3.0,
+    playback_slowdown=PLAYBACK_SLOWDOWN,
+    rearm_seconds=2.0,
+)
 
 
 frame_duration = PLAYBACK_SLOWDOWN / source_fps
@@ -166,7 +177,7 @@ cv2.setMouseCallback(
 
 
 # =========================================
-# 5. Frame Processing Loop
+# 4. Frame Processing Loop
 # =========================================
 
 while True:
@@ -184,6 +195,8 @@ while True:
             )
 
             break
+
+        video_time = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
 
 
         # =====================================
@@ -288,6 +301,16 @@ while True:
 
                 status_text = "NO VEST"
 
+            elif status == "CRITICAL_VIOLATION":
+
+                color = (0, 140, 255)
+                status_text = "NO HELMET + NO VEST"
+
+            elif status == "UNKNOWN":
+
+                color = (160, 160, 160)
+                status_text = "CHECKING"
+
 
             # =================================
             # Ignore CRITICAL
@@ -332,7 +355,8 @@ while True:
 
         alerts = monitor.process(
             safety_results,
-            frame=frame
+            frame=frame,
+            video_time=video_time,
         )
 
 
@@ -343,7 +367,7 @@ while True:
         for alert in alerts:
 
             print(
-                f"🚨 ALERT: Person "
+                f" ALERT: Person "
                 f"{alert['person_id']} "
                 f"- {alert['type']}"
             )
@@ -390,12 +414,6 @@ while True:
 
 
         for item in safety_results:
-
-            # Ignore CRITICAL
-            if item["status"] == "CRITICAL_VIOLATION":
-
-                continue
-
 
             print(
                 f"person_id={item['person_id']} "

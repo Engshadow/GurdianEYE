@@ -183,14 +183,9 @@ GurdianEYE/
 
 The live overlay shows each worker's bounding box and PPE status with an FPS counter; confirmed violations are saved as cropped screenshots in `violations/` (filename includes person ID, violation type and timestamp).
 
-<!-- Add your demo screenshot/GIF here, e.g. ![demo](docs/demo.gif) -->
 
-##  Limitations & roadmap
 
-- The one false alarm in the tuning audit was a **traffic barrier detected as a person** — the temporal logic held up; the detector is now the ceiling. Next: person hard-negatives, `model.tune()`, multi-scale training.
-- Evaluate `ppe_yolo11s_fet004.pt` (direct no-hardhat / no-vest classes) as the primary model.
-- The ground-truth labeling pipeline is ready (`tuning/gt/`, `tuning/export_events.py`): annotate ~300–500 frames, then re-rank sweeps with `--gt`.
-- Restricted-zone support (`safety_monitor.is_inside_restricted_zone`) is implemented but not wired into the default pipeline yet.
+
 
 ## License
 

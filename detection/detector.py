@@ -47,13 +47,45 @@ class Detector:
                 if self._normalise_class_name(name) in wanted
             ]
 
-    def detect_frame(self, frame):
-        """
-        Runs YOLO on a single frame.
-        Returns:
-            detections: list of dicts (class, confidence, bbox)
-            results: raw YOLO results (used for drawing boxes)
-        """
+    def detect_frame(self, frame, smooth=True):
+        # """
+        # Runs YOLO on a single frame.
+        # Returns:
+        #     detections: list of dicts (class, confidence, bbox)
+        #     results: raw YOLO results (used for drawing boxes)
+        # """
+        # Pass smooth=False to get raw (pre-EMA) boxes/confidences — used
+        # by the offline tuning pipeline, which re-applies EMA itself so
+        # that smoothing parameters can be swept on a cached replay.
+        # """
+        # if not smooth:
+        #     raw_kwargs = {
+        #         "conf": self.confidence_threshold,
+        #         "iou": self.iou_threshold,
+        #         "imgsz": self.img_size,
+        #         "persist": True,
+        #         "tracker": "bytetrack.yaml",
+        #         "verbose": False,
+        #     }
+        #     if self.use_tta:
+        #         raw_kwargs["augment"] = True
+        #     if self.class_filter:
+        #         raw_kwargs["classes"] = self.class_filter
+
+        #     results = self.model.track(frame, **raw_kwargs)
+        #     detections = []
+        #     for result in results:
+        #         for box in result.boxes:
+        #             detection = {
+        #                 "class": self.class_names[int(box.cls[0])],
+        #                 "confidence": float(box.conf[0]),
+        #                 "bbox": [float(v) for v in box.xyxy[0].tolist()],
+        #             }
+        #             if box.id is not None:
+        #                 detection["track_id"] = int(box.id[0])
+        #             detections.append(detection)
+        #     return detections, results
+
         kwargs = {
             "conf": self.confidence_threshold,
             "iou": self.iou_threshold,

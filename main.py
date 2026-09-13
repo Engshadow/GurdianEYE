@@ -16,7 +16,7 @@ from timing import TimingConfig
 
 PROJECT_DIR = Path(__file__).resolve().parent
 
-VIDEO_SOURCE = PROJECT_DIR / "videos" / "test3.mp4"
+VIDEO_SOURCE = PROJECT_DIR / "videos" / "test5.mp4"
 MODEL_PATH = PROJECT_DIR / "models" / "best.pt"
 VIOLATIONS_DIR = PROJECT_DIR / "violations"
 
@@ -75,15 +75,15 @@ if not source_fps or source_fps <= 0:
 
 
 timing = TimingConfig(
-    violation_seconds=1.0,
-    filter_seconds=0.5,
-    stability_seconds=0.6,
+    violation_seconds=0.5,   # tuned: redundant with filter; 0.5 cuts latency
+    filter_seconds=0.5,      # tuned: flicker knee (TUNING_REPORT.md)
+    stability_seconds=0.4,   # tuned: short so PPE removal isn't masked
     source_fps=source_fps,
     playback_slowdown=PLAYBACK_SLOWDOWN,
 )
 
 matcher = PPEMatcher(MatcherConfig(
-    min_person_confidence=0.30,
+    min_person_confidence=0.45,
     min_ppe_confidence=0.30,
     temporal_filter_frames=timing.temporal_filter_frames,
     stability_frames=timing.stability_frames,

@@ -4,9 +4,9 @@ from dataclasses import dataclass
 @dataclass
 class TimingConfig:
 
-    violation_seconds: float = 1.0
+    violation_seconds: float = 0.5
     filter_seconds: float = 0.5
-    stability_seconds: float = 0.6
+    stability_seconds: float = 0.4
     source_fps: float = 30.0
     playback_slowdown: float = 1.0
 
